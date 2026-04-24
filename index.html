@@ -674,7 +674,21 @@
                         <canvas id="monthlyChart"></canvas>
                     </div>
                 </div>
-                
+
+                <div class="stats-section">
+                    <div class="section-title">🕐 作息时间点分布</div>
+                    <div class="chart-container">
+                        <canvas id="timeDistChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="stats-section">
+                    <div class="section-title">🏃 每日运动 &amp; 散步时长（分钟）</div>
+                    <div class="chart-container">
+                        <canvas id="dailyActivityChart"></canvas>
+                    </div>
+                </div>
+
                 <div class="stats-section">
                     <div class="section-title">📈 年度统计</div>
                     <div class="year-nav">
@@ -713,6 +727,8 @@
         let currentYear = new Date().getFullYear();
         let monthlyChart = null;
         let yearlyChart = null;
+        let timeDistChart = null;
+        let dailyActivityChart = null;
         let recognition = null;
         let isRecording = false;
         let saveTimer = null;
@@ -1607,6 +1623,8 @@
         
         async function loadStats() {
             await loadMonthlyStats();
+            await loadTimeDistStats();
+            await loadDailyActivityStats();
             await loadYearlyStats();
         }
         
@@ -1784,6 +1802,218 @@
             }
         }
         
+        // 作息时间点分布 — shows bath_time and bed_time as hour values per day
+        async function loadTimeDistStats() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+
+            try {
+                const { data, error } = await supabase
+                    .from('diary_records')
+                    .select('date, bath_time, bed_time')
+                    .gte('date', `${year}-${month.toString().padStart(2, '0')}-01`)
+                    .lt('date', `${year}-${(month + 1).toString().padStart(2, '0')}-01`)
+                    .order('date', { ascending: true });
+
+                if (error) {
+                    console.error('加载作息时间分布失败:', error);
+                    return;
+                }
+
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const dayLabels = [];
+                const bathPoints = new Array(daysInMonth).fill(null);
+                const bedPoints = new Array(daysInMonth).fill(null);
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    dayLabels.push(`${month}/${d}`);
+                }
+
+                function timeToHour(t) {
+                    if (!t) return null;
+                    const parts = t.split(':');
+                    let h = parseInt(parts[0]);
+                    const m = parseInt(parts[1]) / 60;
+                    // Treat early morning hours (0-6) as next-day for better chart readability
+                    if (h < 7) h += 24;
+                    return parseFloat((h + m).toFixed(2));
+                }
+
+                if (data) {
+                    data.forEach(record => {
+                        const day = new Date(record.date).getDate() - 1;
+                        if (day >= 0 && day < daysInMonth) {
+                            bathPoints[day] = timeToHour(record.bath_time);
+                            bedPoints[day] = timeToHour(record.bed_time);
+                        }
+                    });
+                }
+
+                const ctx = document.getElementById('timeDistChart').getContext('2d');
+                if (timeDistChart) timeDistChart.destroy();
+
+                timeDistChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: dayLabels,
+                        datasets: [
+                            {
+                                label: '🛁 洗澡时间',
+                                data: bathPoints,
+                                borderColor: '#ff9f40',
+                                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#ff9f40',
+                                spanGaps: false,
+                                tension: 0.3
+                            },
+                            {
+                                label: '🛏️ 上床时间',
+                                data: bedPoints,
+                                borderColor: '#9b59b6',
+                                backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 5,
+                                pointBackgroundColor: '#9b59b6',
+                                spanGaps: false,
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { padding: 20, usePointStyle: true } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const val = context.parsed.y;
+                                        if (val === null) return null;
+                                        let h = Math.floor(val);
+                                        const m = Math.round((val - h) * 60);
+                                        if (h >= 24) h -= 24;
+                                        return `${context.dataset.label}: ${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } },
+                            y: {
+                                title: { display: true, text: '时间（小时）' },
+                                ticks: {
+                                    callback: function(value) {
+                                        let h = Math.floor(value);
+                                        const m = Math.round((value - h) * 60);
+                                        if (h >= 24) h -= 24;
+                                        return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+                                    },
+                                    stepSize: 0.5
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('创建作息时间分布图表时出错:', error);
+            }
+        }
+
+        // 每日运动 & 散步时长 — bar chart showing actual minutes per day this month
+        async function loadDailyActivityStats() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+
+            try {
+                const { data, error } = await supabase
+                    .from('diary_records')
+                    .select('date, walk_duration_minutes, exercise_duration_minutes')
+                    .gte('date', `${year}-${month.toString().padStart(2, '0')}-01`)
+                    .lt('date', `${year}-${(month + 1).toString().padStart(2, '0')}-01`)
+                    .order('date', { ascending: true });
+
+                if (error) {
+                    console.error('加载每日活动时长失败:', error);
+                    return;
+                }
+
+                const daysInMonth = new Date(year, month, 0).getDate();
+                const dayLabels = [];
+                const walkMins = new Array(daysInMonth).fill(0);
+                const exerciseMins = new Array(daysInMonth).fill(0);
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    dayLabels.push(`${month}/${d}`);
+                }
+
+                if (data) {
+                    data.forEach(record => {
+                        const day = new Date(record.date).getDate() - 1;
+                        if (day >= 0 && day < daysInMonth) {
+                            walkMins[day] = record.walk_duration_minutes || 0;
+                            exerciseMins[day] = record.exercise_duration_minutes || 0;
+                        }
+                    });
+                }
+
+                const ctx = document.getElementById('dailyActivityChart').getContext('2d');
+                if (dailyActivityChart) dailyActivityChart.destroy();
+
+                dailyActivityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: dayLabels,
+                        datasets: [
+                            {
+                                label: '🚶 散步（分钟）',
+                                data: walkMins,
+                                backgroundColor: 'rgba(52, 199, 89, 0.7)',
+                                borderColor: '#34c759',
+                                borderWidth: 1,
+                                borderRadius: 4
+                            },
+                            {
+                                label: '💪 运动（分钟）',
+                                data: exerciseMins,
+                                backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                                borderColor: '#3498db',
+                                borderWidth: 1,
+                                borderRadius: 4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { padding: 20, usePointStyle: true } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.parsed.y} 分钟`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxRotation: 45, minRotation: 45 } },
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: '时长（分钟）' },
+                                ticks: { stepSize: 10 }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('创建每日活动时长图表时出错:', error);
+            }
+        }
+
         async function loadYearlyStats() {
             document.getElementById('currentYear').textContent = currentYear;
             
