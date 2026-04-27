@@ -2825,7 +2825,7 @@
 
 
         async function logout() {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' });
             showNotification('已退出登录', 'info');
         }
         
