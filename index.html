@@ -37,6 +37,23 @@
         
         .container { max-width: 500px; margin: 0 auto; }
         
+        .env-badge {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 3000;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            color: #fff;
+            background: linear-gradient(135deg, #ff8a00 0%, #ff3d00 100%);
+            box-shadow: 0 6px 14px rgba(255, 90, 0, 0.35);
+            user-select: none;
+            pointer-events: none;
+        }
+        
         /* 头部 */
         .header {
             text-align: center;
@@ -742,6 +759,7 @@
     </style>
 </head>
 <body>
+    <div class="env-badge">TEST</div>
     <div class="container">
         <!-- 认证界面 -->
         <div id="authSection" class="auth-section" style="display: none;">
