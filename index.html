@@ -173,7 +173,7 @@
         .love-row {
             display: flex;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: space-between;
             padding: 10px 14px;
             min-height: 44px;
             box-sizing: border-box;
@@ -181,12 +181,23 @@
         }
         
         .love-row-hint {
-            flex: 1;
+            flex: 0 0 auto;
             min-height: 1px;
+        }
+        
+        .love-row-icon {
+            font-size: 20px;
+            line-height: 1;
+            color: #c7c7cc;
+            transition: color 0.2s ease;
         }
         
         .settings-group:has(#loveSwitch:checked) {
             background: #e8f5ee;
+        }
+        
+        .settings-group:has(#loveSwitch:checked) .love-row-icon {
+            color: #ff3b30;
         }
         
         /* iOS 风格开关 */
@@ -333,7 +344,7 @@
         }
         
         .time-btn {
-            padding: 8px 14px;
+            padding: 8px 0;
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
             color: white;
             border: none;
@@ -344,6 +355,8 @@
             transition: all 0.3s ease;
             white-space: nowrap;
             flex-shrink: 0;
+            width: 98px;
+            text-align: center;
         }
         
         .time-btn:hover {
@@ -595,9 +608,9 @@
         
         .legend-dot.happy { background: #6BC8A0; }
         .legend-dot.calm { background: #7B9FE8; }
-        .legend-dot.argue { background: #F5C97A; }
+        .legend-dot.argue { background: #E8915C; }
         .legend-dot.cold { background: #B8A8D8; }
-        .legend-dot.squall { background: #E8915C; }
+        .legend-dot.squall { background: #F5C97A; }
         
         .mood-calendar {
             display: grid;
@@ -913,6 +926,7 @@
                     <div class="private-settings">
                         <div class="settings-group">
                             <div class="love-row" id="loveToggle">
+                                <span class="love-row-icon" aria-hidden="true">♥</span>
                                 <span class="love-row-hint" aria-hidden="true"></span>
                                 <label class="ios-switch" for="loveSwitch">
                                     <input type="checkbox" id="loveSwitch" autocomplete="off" onchange="onLoveSwitchChange()" aria-label="备忘标记">
@@ -2059,12 +2073,14 @@
                     const moodColor = {
                         'happy': '#4cd964',
                         'calm': '#5ac8fa',
-                        'argue': '#ff3b30',
-                        'squall': '#E8915C',
+                        'argue': '#E8915C',
+                        'squall': '#F5C97A',
                         'cold': '#8e8e93'
                     }[record.mood] || '#666';
                     
-                    const loveEmoji = record.love ? '❤️' : '💙';
+                    const loveEmoji = record.love
+                        ? '<span style="color:#ff3b30;">♥</span>'
+                        : '<span style="color:#c7c7cc;">♥</span>';
                     
                     html += `
                         <div class="history-item" onclick="viewRecord('${record.id}')" style="
@@ -2127,25 +2143,26 @@
                     'cold': '🥶 冷战'
                 }[data.mood] || '未知';
                 
-                const loveText = data.love ? '已标记' : '未标记';
+                const loveIcon = data.love
+                    ? '<span style="color:#ff3b30;font-size:20px;">♥</span>'
+                    : '<span style="color:#c7c7cc;font-size:20px;">♥</span>';
                 
                 let details = `
                     <div style="margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">📊 记录详情</div>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                        <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px; display:flex; align-items:center; justify-content:space-between;">
+                            <span>📊 记录详情</span>
+                            ${loveIcon}
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                             <div style="padding: 12px; background: #f8f9fa; border-radius: 10px;">
                                 <div style="font-size: 12px; color: #666;">情绪</div>
                                 <div style="font-size: 16px; font-weight: 600;">${moodText}</div>
-                            </div>
-                            <div style="padding: 12px; background: #f8f9fa; border-radius: 10px;">
-                                <div style="font-size: 12px; color: #666;">备忘</div>
-                                <div style="font-size: 16px; font-weight: 600;">${loveText}</div>
                             </div>
                         </div>
                     </div>
                 `;
                 
-                if (data.bath_time || data.bed_time) {
+                if (data.bath_time || data.bed_time || data.walk_start_time || data.walk_end_time || data.walk_duration_minutes || data.exercise_start_time || data.exercise_end_time || data.exercise_duration_minutes) {
                     details += `
                         <div style="margin-bottom: 20px;">
                             <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">⏰ 时间记录</div>
@@ -2160,6 +2177,26 @@
                                     <div style="padding: 12px; background: #f8f9fa; border-radius: 10px;">
                                         <div style="font-size: 12px; color: #666;">上床时间</div>
                                         <div style="font-size: 16px; font-weight: 600;">${data.bed_time}</div>
+                                    </div>
+                                ` : ''}
+                                ${(data.walk_start_time || data.walk_end_time || data.walk_duration_minutes) ? `
+                                    <div style="padding: 12px; background: #f8f9fa; border-radius: 10px;">
+                                        <div style="font-size: 12px; color: #666;">散步</div>
+                                        <div style="font-size: 14px; font-weight: 600; line-height:1.5;">
+                                            ${data.walk_start_time ? `开始 ${data.walk_start_time}` : ''}
+                                            ${data.walk_end_time ? `${data.walk_start_time ? '<br>' : ''}结束 ${data.walk_end_time}` : ''}
+                                            ${data.walk_duration_minutes ? `${(data.walk_start_time || data.walk_end_time) ? '<br>' : ''}时长 ${data.walk_duration_minutes} 分钟` : ''}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${(data.exercise_start_time || data.exercise_end_time || data.exercise_duration_minutes) ? `
+                                    <div style="padding: 12px; background: #f8f9fa; border-radius: 10px;">
+                                        <div style="font-size: 12px; color: #666;">运动</div>
+                                        <div style="font-size: 14px; font-weight: 600; line-height:1.5;">
+                                            ${data.exercise_start_time ? `开始 ${data.exercise_start_time}` : ''}
+                                            ${data.exercise_end_time ? `${data.exercise_start_time ? '<br>' : ''}结束 ${data.exercise_end_time}` : ''}
+                                            ${data.exercise_duration_minutes ? `${(data.exercise_start_time || data.exercise_end_time) ? '<br>' : ''}时长 ${data.exercise_duration_minutes} 分钟` : ''}
+                                        </div>
                                     </div>
                                 ` : ''}
                             </div>
@@ -2349,8 +2386,8 @@
             const moodColors = {
                 happy: '#6BC8A0',
                 calm: '#7B9FE8',
-                argue: '#F5C97A',
-                squall: '#E8915C',
+                argue: '#E8915C',
+                squall: '#F5C97A',
                 cold: '#B8A8D8'
             };
             
@@ -2415,7 +2452,7 @@
                     labels: ['开心', '平静', '争吵', '小风波', '冷战'],
                     datasets: [{
                         data: data,
-                        backgroundColor: ['#6BC8A0', '#7B9FE8', '#F5C97A', '#E8915C', '#B8A8D8'],
+                        backgroundColor: ['#6BC8A0', '#7B9FE8', '#E8915C', '#F5C97A', '#B8A8D8'],
                         borderWidth: 2,
                         borderColor: '#fff',
                         hoverOffset: 4
@@ -2802,8 +2839,8 @@
                     datasets: [
                         { label: '开心', data: happyD, backgroundColor: '#6BC8A0', stack: 'mood' },
                         { label: '平静', data: calmD, backgroundColor: '#7B9FE8', stack: 'mood' },
-                        { label: '争吵', data: argueD, backgroundColor: '#F5C97A', stack: 'mood' },
-                        { label: '小风波', data: squallD, backgroundColor: '#E8915C', stack: 'mood' },
+                        { label: '争吵', data: argueD, backgroundColor: '#E8915C', stack: 'mood' },
+                        { label: '小风波', data: squallD, backgroundColor: '#F5C97A', stack: 'mood' },
                         { label: '冷战', data: coldD, backgroundColor: '#B8A8D8', stack: 'mood' }
                     ]
                 },
