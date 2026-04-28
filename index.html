@@ -2455,11 +2455,10 @@
         }
         
         // 心情日历
-        function renderMoodCalendar() {
+        async function renderMoodCalendar() {
             const calendarEl = document.getElementById('moodCalendar');
             calendarEl.innerHTML = '';
             
-            // 模拟数据 - 参考你的设计
             const moodColors = {
                 happy: '#6BC8A0',
                 calm: '#7B9FE8',
@@ -2471,14 +2470,35 @@
             const selectedYear = getSelectedYear();
             const currentMonth = new Date().getMonth() + 1;
             const daysInMonth = new Date(selectedYear, currentMonth, 0).getDate();
-            // 周起始按周日（0），1号是周三则前面留3格
             const firstDayOffset = new Date(selectedYear, currentMonth - 1, 1).getDay();
-            
-            // 模拟当月数据
-            const moodPattern = ['happy', 'calm', 'squall', 'argue', 'happy', 'cold', 'calm'];
-            const moodData = Array.from({ length: daysInMonth }, (_, i) => moodPattern[i % moodPattern.length]);
-            
-            const loveDays = [4, 13, 18, 19, 27];
+            const moodByDay = {};
+            const loveDays = new Set();
+
+            if (USE_DEMO_STATS_DATA) {
+                const moodPattern = ['happy', 'calm', 'squall', 'argue', 'happy', 'cold', 'calm'];
+                for (let i = 1; i <= daysInMonth; i++) {
+                    moodByDay[i] = moodPattern[(i - 1) % moodPattern.length];
+                    if ([4, 13, 18, 19, 27].includes(i)) loveDays.add(i);
+                }
+            } else {
+                try {
+                    const { data: records, error } = await supabase
+                        .from('diary_records')
+                        .select('date, mood, love')
+                        .gte('date', `${selectedYear}-${String(currentMonth).padStart(2, '0')}-01`)
+                        .lte('date', `${selectedYear}-${String(currentMonth).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`)
+                        .order('date', { ascending: true });
+                    if (error) throw error;
+                    (records || []).forEach(record => {
+                        const day = parseInt(String(record.date).split('-')[2], 10);
+                        if (!Number.isInteger(day)) return;
+                        if (record.mood) moodByDay[day] = record.mood;
+                        if (record.love) loveDays.add(day);
+                    });
+                } catch (error) {
+                    console.error('获取心情日历数据失败:', error);
+                }
+            }
             
             for (let i = 0; i < firstDayOffset; i++) {
                 const emptyEl = document.createElement('div');
@@ -2486,34 +2506,61 @@
                 calendarEl.appendChild(emptyEl);
             }
             
-            moodData.forEach((mood, index) => {
-                const day = index + 1;
+            for (let day = 1; day <= daysInMonth; day++) {
+                const mood = moodByDay[day];
                 const dayEl = document.createElement('div');
                 dayEl.className = 'calendar-day';
-                dayEl.style.background = moodColors[mood];
+                dayEl.style.background = moodColors[mood] || '#e5e5ea';
+                if (!mood) dayEl.style.color = '#8e8e93';
                 
                 dayEl.innerHTML = `
                     <div class="day-number">${day}</div>
-                    ${loveDays.includes(day) ? '<div class="love-indicator">♥</div>' : ''}
+                    ${loveDays.has(day) ? '<div class="love-indicator">♥</div>' : ''}
                 `;
                 
                 calendarEl.appendChild(dayEl);
-            });
+            }
         }
         
         // 心情占比环形图
-        function renderMoodDonut() {
+        async function renderMoodDonut() {
             const ctx = document.getElementById('moodDonut').getContext('2d');
-            
-            // 模拟数据 - 确保总和为100%
-            const data = [32, 22, 14, 12, 20];
-            
+            const selectedYear = getSelectedYear();
+            const currentMonth = new Date().getMonth() + 1;
+            const daysInMonth = new Date(selectedYear, currentMonth, 0).getDate();
+            const moodOrder = ['happy', 'calm', 'argue', 'squall', 'cold'];
+            const data = [0, 0, 0, 0, 0];
+
+            if (USE_DEMO_STATS_DATA) {
+                data.splice(0, data.length, 32, 22, 14, 12, 20);
+            } else {
+                try {
+                    const { data: records, error } = await supabase
+                        .from('diary_records')
+                        .select('mood, date')
+                        .gte('date', `${selectedYear}-${String(currentMonth).padStart(2, '0')}-01`)
+                        .lte('date', `${selectedYear}-${String(currentMonth).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`);
+                    if (error) throw error;
+                    (records || []).forEach(record => {
+                        const idx = moodOrder.indexOf(record.mood);
+                        if (idx >= 0) data[idx] += 1;
+                    });
+                } catch (error) {
+                    console.error('获取心情占比数据失败:', error);
+                }
+            }
+
+            const total = data.reduce((sum, value) => sum + value, 0);
+            const percent = total > 0
+                ? data.map(value => Math.round((value / total) * 100))
+                : [0, 0, 0, 0, 0];
+
             // 更新百分比显示
-            document.getElementById('happyPercent').textContent = data[0] + '%';
-            document.getElementById('calmPercent').textContent = data[1] + '%';
-            document.getElementById('arguePercent').textContent = data[2] + '%';
-            document.getElementById('squallPercent').textContent = data[3] + '%';
-            document.getElementById('coldPercent').textContent = data[4] + '%';
+            document.getElementById('happyPercent').textContent = percent[0] + '%';
+            document.getElementById('calmPercent').textContent = percent[1] + '%';
+            document.getElementById('arguePercent').textContent = percent[2] + '%';
+            document.getElementById('squallPercent').textContent = percent[3] + '%';
+            document.getElementById('coldPercent').textContent = percent[4] + '%';
             
             // 如果已经有图表，先销毁 - 修复：检查是否是函数
             if (window.moodDonutChart && typeof window.moodDonutChart.destroy === 'function') {
@@ -2526,10 +2573,12 @@
             window.moodDonutChart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['开心', '平静', '争吵', '小风波', '冷战'],
+                    labels: total > 0 ? ['开心', '平静', '争吵', '小风波', '冷战'] : ['暂无数据'],
                     datasets: [{
-                        data: data,
-                        backgroundColor: ['#6BC8A0', '#7B9FE8', '#E8915C', '#F5C97A', '#B8A8D8'],
+                        data: total > 0 ? data : [1],
+                        backgroundColor: total > 0
+                            ? ['#6BC8A0', '#7B9FE8', '#E8915C', '#F5C97A', '#B8A8D8']
+                            : ['#e5e5ea'],
                         borderWidth: 2,
                         borderColor: '#fff',
                         hoverOffset: 4
@@ -2853,7 +2902,7 @@
         }
         
         // 全年心情分布图
-        function renderAnnualChart() {
+        async function renderAnnualChart() {
             const canvas = document.getElementById('annualChart');
             if (!canvas) {
                 console.error('找不到annualChart canvas元素');
@@ -2869,14 +2918,51 @@
             }
             window.annualChart = null;
             
-            // 模拟数据
             const months = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-            const intimate = [3, 2, 5, 3, 6, 4, 7, 9, 3, 10, 3, 3];
-            const happyD = [10, 7, 12, 9, 14, 10, 15, 17, 9, 18, 10, 9];
-            const calmD = [7, 5, 7, 6, 5, 7, 4, 4, 6, 3, 7, 8];
-            const argueD = [4, 7, 3, 6, 3, 5, 3, 3, 7, 2, 5, 6];
-            const squallD = [3, 4, 3, 4, 3, 3, 3, 2, 4, 2, 3, 3];
-            const coldD = [4, 5, 3, 5, 3, 3, 3, 2, 4, 2, 3, 3];
+            const intimate = new Array(12).fill(0);
+            const happyD = new Array(12).fill(0);
+            const calmD = new Array(12).fill(0);
+            const argueD = new Array(12).fill(0);
+            const squallD = new Array(12).fill(0);
+            const coldD = new Array(12).fill(0);
+
+            if (USE_DEMO_STATS_DATA) {
+                intimate.splice(0, 12, 3, 2, 5, 3, 6, 4, 7, 9, 3, 10, 3, 3);
+                happyD.splice(0, 12, 10, 7, 12, 9, 14, 10, 15, 17, 9, 18, 10, 9);
+                calmD.splice(0, 12, 7, 5, 7, 6, 5, 7, 4, 4, 6, 3, 7, 8);
+                argueD.splice(0, 12, 4, 7, 3, 6, 3, 5, 3, 3, 7, 2, 5, 6);
+                squallD.splice(0, 12, 3, 4, 3, 4, 3, 3, 3, 2, 4, 2, 3, 3);
+                coldD.splice(0, 12, 4, 5, 3, 5, 3, 3, 3, 2, 4, 2, 3, 3);
+            } else {
+                const selectedYear = getSelectedYear();
+                try {
+                    const { data: records, error } = await supabase
+                        .from('diary_records')
+                        .select('date, mood, love')
+                        .gte('date', `${selectedYear}-01-01`)
+                        .lte('date', `${selectedYear}-12-31`)
+                        .order('date', { ascending: true });
+                    if (error) throw error;
+                    (records || []).forEach(record => {
+                        const month = parseInt(String(record.date).split('-')[1], 10) - 1;
+                        if (month < 0 || month > 11) return;
+                        if (record.love) intimate[month] += 1;
+                        if (record.mood === 'happy') happyD[month] += 1;
+                        else if (record.mood === 'calm') calmD[month] += 1;
+                        else if (record.mood === 'argue') argueD[month] += 1;
+                        else if (record.mood === 'squall') squallD[month] += 1;
+                        else if (record.mood === 'cold') coldD[month] += 1;
+                    });
+                } catch (error) {
+                    console.error('获取全年心情分布数据失败:', error);
+                }
+            }
+
+            const yMax = Math.max(
+                5,
+                ...months.map((_, i) => happyD[i] + calmD[i] + argueD[i] + squallD[i] + coldD[i])
+            );
+            const yAxisMax = Math.ceil((yMax + 1) / 5) * 5;
             
             // 创建自定义插件来显示爱爱次数（灰色文字）
             const intimateLabelsPlugin = {
@@ -2933,6 +3019,7 @@
                         x: { stacked: true, grid: { display: false }, ticks: { autoSkip: false } },
                         y: { 
                             stacked: true,
+                            max: yAxisMax,
                             grid: { color: 'rgba(0,0,0,0.06)' },
                             title: {
                                 display: true,
@@ -2948,16 +3035,47 @@
         }
         
         // 更新活动汇总
-        function updateActivitySummary() {
-            // 模拟数据
-            document.getElementById('exerciseTotal').textContent = '148h';
-            document.getElementById('walkTotal').textContent = '112h';
-            document.getElementById('loveTotal').textContent = '58次';
-            
-            // 更新进度条
-            document.getElementById('exerciseProgress').style.width = '82%';
-            document.getElementById('walkProgress').style.width = '62%';
-            document.getElementById('loveProgress').style.width = '32%';
+        async function updateActivitySummary() {
+            let exerciseMinutes = 0;
+            let walkMinutes = 0;
+            let loveCount = 0;
+
+            if (USE_DEMO_STATS_DATA) {
+                exerciseMinutes = 148 * 60;
+                walkMinutes = 112 * 60;
+                loveCount = 58;
+            } else {
+                const selectedYear = getSelectedYear();
+                try {
+                    const { data: records, error } = await supabase
+                        .from('diary_records')
+                        .select('exercise_duration_minutes, walk_duration_minutes, love, date')
+                        .gte('date', `${selectedYear}-01-01`)
+                        .lte('date', `${selectedYear}-12-31`);
+                    if (error) throw error;
+                    (records || []).forEach(record => {
+                        exerciseMinutes += Number(record.exercise_duration_minutes || 0);
+                        walkMinutes += Number(record.walk_duration_minutes || 0);
+                        if (record.love) loveCount += 1;
+                    });
+                } catch (error) {
+                    console.error('获取年度活动汇总失败:', error);
+                }
+            }
+
+            const exerciseHours = (exerciseMinutes / 60);
+            const walkHours = (walkMinutes / 60);
+            document.getElementById('exerciseTotal').textContent = `${exerciseHours.toFixed(1)}h`;
+            document.getElementById('walkTotal').textContent = `${walkHours.toFixed(1)}h`;
+            document.getElementById('loveTotal').textContent = `${loveCount}次`;
+
+            // 给进度条一个稳定基准，避免全 0 时错觉“有值”
+            const exerciseProgress = Math.min(100, Math.round((exerciseHours / 30) * 100));
+            const walkProgress = Math.min(100, Math.round((walkHours / 30) * 100));
+            const loveProgress = Math.min(100, Math.round((loveCount / 30) * 100));
+            document.getElementById('exerciseProgress').style.width = `${exerciseProgress}%`;
+            document.getElementById('walkProgress').style.width = `${walkProgress}%`;
+            document.getElementById('loveProgress').style.width = `${loveProgress}%`;
         }
         
         function changeYear(delta) {
