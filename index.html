@@ -873,10 +873,54 @@
         .legend-moods {
             gap: 4px 8px !important;
         }
+        
+        /* 测试站未配置独立库时的顶部提示（非阻塞） */
+        .db-env-banner {
+            display: none;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            background: #fff8e6;
+            border: 1px solid #f0c36d;
+            border-radius: 12px;
+            font-size: 13px;
+            color: #7a5d00;
+            line-height: 1.45;
+            box-sizing: border-box;
+        }
+        
+        .db-env-banner.is-visible {
+            display: flex;
+        }
+        
+        .db-env-banner-close {
+            flex-shrink: 0;
+            border: none;
+            background: transparent;
+            color: #8a7040;
+            font-size: 22px;
+            line-height: 1;
+            padding: 0 4px;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+        
+        .db-env-banner-close:hover {
+            background: rgba(0, 0, 0, 0.06);
+            color: #5c4a20;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div id="dbEnvBanner" class="db-env-banner" role="status" aria-live="polite" hidden>
+            <span class="db-env-banner-text">
+                当前为测试站点，但未配置独立测试库（<code>SUPABASE_CONFIG.test</code>），数据仍会写入<strong>生产数据库</strong>。请在代码中填入测试项目的 URL 与 anon key，或在 Supabase 新建测试项目后再部署。
+            </span>
+            <button type="button" class="db-env-banner-close" aria-label="关闭提示">×</button>
+        </div>
         <!-- 认证界面 -->
         <div id="authSection" class="auth-section" style="display: none;">
             <div class="auth-title" id="authTitle">登录家日记</div>
@@ -1150,8 +1194,8 @@
             },
             test: {
                 // TODO: 请替换为测试库 Supabase 项目
-                url: '',
-                anonKey: ''
+                url: 'https://bsivqyndmutznkhoowic.supabase.co',
+                anonKey: 'sb_publishable_Z18aj44xRKimoHzLL1k7NQ_WRgNC3Yn'
             }
         };
 
@@ -1169,9 +1213,18 @@
         window.__DB_ENV__ = CURRENT_DB_ENV;
         if (isTestSite && !hasSelectedConfig) {
             console.warn('[DB] lover-test 未配置独立 Supabase，当前仍在使用 PROD 数据库');
-            setTimeout(() => {
-                alert('警告：当前是测试站，但还未配置测试库 Supabase，正在写入生产数据库。请先填写 SUPABASE_CONFIG.test。');
-            }, 0);
+            queueMicrotask(() => {
+                const banner = document.getElementById('dbEnvBanner');
+                if (!banner || sessionStorage.getItem('hideTestDbBanner') === '1') return;
+                banner.hidden = false;
+                banner.classList.add('is-visible');
+                const closeBtn = banner.querySelector('.db-env-banner-close');
+                closeBtn?.addEventListener('click', () => {
+                    sessionStorage.setItem('hideTestDbBanner', '1');
+                    banner.classList.remove('is-visible');
+                    banner.hidden = true;
+                });
+            });
         }
         
         // 初始化 Supabase 客户端（禁用 schema 缓存）
