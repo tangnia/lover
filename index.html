@@ -1355,30 +1355,18 @@
             button.disabled = true;
             
             try {
-                const { data, error } = await supabase.auth.signInWithPassword({
+                const { error } = await supabase.auth.signInWithPassword({
                     email,
                     password
                 });
                 
                 if (error) {
-                    // 如果登录失败，尝试注册
-                    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                        email,
-                        password
-                    });
-                    
-                    if (signUpError) {
-                        showNotification('注册失败: ' + signUpError.message, 'error');
-                    } else {
-                        showNotification('注册成功！请登录', 'success');
-                        // 清空密码框，让用户重新输入
-                        document.getElementById('authPassword').value = '';
-                    }
+                    showNotification('登录失败：' + error.message, 'error');
                 } else {
                     showNotification('登录成功', 'success');
                 }
             } catch (error) {
-                showNotification('操作失败: ' + error.message, 'error');
+                showNotification('登录失败: ' + error.message, 'error');
             } finally {
                 button.textContent = originalText;
                 button.disabled = false;
