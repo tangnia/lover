@@ -690,7 +690,7 @@
         
         .progress-bar {
             height: 8px;
-            background: #e8e8e4;
+            background: #f2f2f7;
             border-radius: 4px;
             overflow: hidden;
         }
@@ -2510,7 +2510,7 @@
                 const mood = moodByDay[day];
                 const dayEl = document.createElement('div');
                 dayEl.className = 'calendar-day';
-                dayEl.style.background = moodColors[mood] || '#e5e5ea';
+                dayEl.style.background = moodColors[mood] || '#f2f2f7';
                 if (!mood) dayEl.style.color = '#8e8e93';
                 
                 dayEl.innerHTML = `
@@ -2578,7 +2578,7 @@
                         data: total > 0 ? data : [1],
                         backgroundColor: total > 0
                             ? ['#6BC8A0', '#7B9FE8', '#E8915C', '#F5C97A', '#B8A8D8']
-                            : ['#e5e5ea'],
+                            : ['#f2f2f7'],
                         borderWidth: 2,
                         borderColor: '#fff',
                         hoverOffset: 4
